@@ -3,7 +3,7 @@
  * Handles fetch calls, JWT headers, and error handling.
  */
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'https://healthcare-appointment-api-2nxo.onrender.com/api';
 
 // ── Token Management ────────────────────────────────────────────
 function getToken()    { return localStorage.getItem('token'); }
