@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Slots — Healthcare App</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🏥</div>
+        <span>Healthcare<br>App</span>
+      </div>
+      <div class="sidebar-user">
+        <div class="user-name" id="sidebar-name">Loading...</div>
+        <div class="user-role">Doctor</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html"    class="nav-item"><span class="icon">🏠</span> Dashboard</a>
+        <a href="availability.html" class="nav-item active"><span class="icon">🕐</span> Manage Slots</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn-logout" onclick="logout()">🚪 Logout</button>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <div class="topbar">
+        <div>
+          <h2>Manage Availability Slots</h2>
+          <div class="breadcrumb">Add or remove your available time slots</div>
+        </div>
+      </div>
+      <div class="content-area">
+        <div style="display:grid; grid-template-columns:320px 1fr; gap:1.25rem; align-items:start;">
+          <!-- Add Slot Form -->
+          <div class="card">
+            <div class="card-header"><h3>Add New Slot</h3></div>
+            <div class="card-body">
+              <div id="form-alert" class="alert alert-danger hidden"></div>
+              <div class="form-group">
+                <label for="slot-date">Date</label>
+                <input type="date" id="slot-date" class="form-control">
+              </div>
+              <div class="form-group">
+                <label for="start-time">Start Time</label>
+                <input type="time" id="start-time" class="form-control">
+              </div>
+              <div class="form-group">
+                <label for="end-time">End Time</label>
+                <input type="time" id="end-time" class="form-control">
+              </div>
+              <button class="btn btn-primary btn-full" id="btn-add" onclick="addSlot()">Add Slot</button>
+            </div>
+          </div>
+
+          <!-- Slots List -->
+          <div class="card">
+            <div class="card-header"><h3>Your Slots</h3></div>
+            <div class="card-body" id="slots-container">
+              <div class="loading">Loading your slots...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script>
+    requireAuth('Doctor');
+    setupSidebar();
+
+    const doctorId = getProfileId();
+
+    // Set minimum date to today
+    document.getElementById('slot-date').min = new Date().toISOString().split('T')[0];
+
+    async function loadSlots() {
+        const container = document.getElementById('slots-container');
+        try {
+            const slots = await Availability.getAll(doctorId);
+            if (slots.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">🕐</div><h3>No slots added</h3><p>Use the form to add available time slots.</p></div>`;
+                return;
+            }
+
+            // Group by date
+            const grouped = {};
+            slots.forEach(s => {
+                const d = formatDate(s.date);
+                if (!grouped[d]) grouped[d] = [];
+                grouped[d].push(s);
+            });
+
+            let html = '';
+            for (const [date, daySlots] of Object.entries(grouped)) {
+                html += `<div class="mb-2"><div style="font-weight:600; font-size:0.875rem; margin-bottom:0.5rem;">${date}</div><div style="display:flex; flex-wrap:wrap; gap:0.5rem;">`;
+                html += daySlots.map(s => `
+                  <div style="display:flex; align-items:center; gap:0.35rem;">
+                    <span class="badge ${s.isBooked ? 'badge-confirmed' : 'badge-pending'}" style="font-size:0.75rem; padding:0.3rem 0.65rem;">
+                      ${formatTime(s.startTime)}
+                      ${s.isBooked ? ' 🔒' : ''}
+                    </span>
+                    ${!s.isBooked
+                      ? `<button class="btn btn-sm btn-danger" onclick="deleteSlot(${s.id})" title="Delete slot">✕</button>`
+                      : ''}
+                  </div>`).join('');
+                html += `</div></div>`;
+            }
+            container.innerHTML = html;
+        } catch (err) {
+            container.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    async function addSlot() {
+        const alert = document.getElementById('form-alert');
+        const btn   = document.getElementById('btn-add');
+        alert.classList.add('hidden');
+
+        const date  = document.getElementById('slot-date').value;
+        const start = document.getElementById('start-time').value;
+        const end   = document.getElementById('end-time').value;
+
+        if (!date || !start || !end) {
+            alert.textContent = 'Please fill in all fields.';
+            alert.classList.remove('hidden');
+            return;
+        }
+
+        btn.textContent = 'Adding...';
+        btn.disabled = true;
+        try {
+            await Availability.addSlot({ date, startTime: start, endTime: end });
+            showToast('Slot added!', 'success');
+            document.getElementById('slot-date').value = '';
+            document.getElementById('start-time').value = '';
+            document.getElementById('end-time').value = '';
+            await loadSlots();
+        } catch (err) {
+            alert.textContent = err.message;
+            alert.classList.remove('hidden');
+        } finally {
+            btn.textContent = 'Add Slot';
+            btn.disabled = false;
+        }
+    }
+
+    async function deleteSlot(id) {
+        if (!confirm('Delete this slot?')) return;
+        try {
+            await Availability.deleteSlot(id);
+            showToast('Slot deleted.', 'info');
+            await loadSlots();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    loadSlots();
+  </script>
+</body>
+</html>

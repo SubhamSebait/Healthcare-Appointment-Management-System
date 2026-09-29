@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Appointments — Healthcare App</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div class="logo-icon">🏥</div><span>Healthcare<br>App</span></div>
+      <div class="sidebar-user">
+        <div class="user-name" id="sidebar-name">Loading...</div>
+        <div class="user-role">Admin</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html"              class="nav-item"><span class="icon">🏠</span> Dashboard</a>
+        <a href="manage-doctors.html"         class="nav-item"><span class="icon">👨‍⚕️</span> Manage Doctors</a>
+        <a href="manage-specializations.html" class="nav-item"><span class="icon">🩺</span> Specializations</a>
+        <a href="patients.html"               class="nav-item"><span class="icon">👥</span> Patients</a>
+        <a href="appointments.html"           class="nav-item active"><span class="icon">📅</span> All Appointments</a>
+      </nav>
+      <div class="sidebar-footer"><button class="btn-logout" onclick="logout()">🚪 Logout</button></div>
+    </aside>
+
+    <div class="main-content">
+      <div class="topbar"><div><h2>All Appointments</h2><div class="breadcrumb">System-wide appointment overview</div></div></div>
+      <div class="content-area">
+        <div class="filters-bar mb-2">
+          <select id="filter-status" class="form-control" style="max-width:180px">
+            <option value="">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Rejected">Rejected</option>
+            <option value="Cancelled">Cancelled</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="card-body" id="appts-container">
+            <div class="loading">Loading appointments...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script>
+    requireAuth('Admin');
+    setupSidebar();
+
+    let allAppts = [];
+
+    async function loadAppointments() {
+        try {
+            allAppts = await Appointments.getAll();
+            renderAppointments(allAppts);
+        } catch (err) {
+            document.getElementById('appts-container').innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    function renderAppointments(appts) {
+        const container = document.getElementById('appts-container');
+        if (appts.length === 0) {
+            container.innerHTML = `<div class="empty-state"><div class="icon">📅</div><h3>No appointments found.</h3></div>`;
+            return;
+        }
+        container.innerHTML = `
+          <div class="table-container">
+            <table>
+              <thead><tr><th>#</th><th>Patient</th><th>Doctor</th><th>Specialization</th><th>Date</th><th>Time</th><th>Status</th><th>Booked At</th></tr></thead>
+              <tbody>
+                ${appts.map((a, i) => `
+                  <tr>
+                    <td>${i+1}</td>
+                    <td><strong>${a.patientName}</strong></td>
+                    <td>${a.doctorName}</td>
+                    <td>${a.specializationName}</td>
+                    <td>${formatDate(a.date)}</td>
+                    <td>${formatTime(a.startTime)} – ${formatTime(a.endTime)}</td>
+                    <td>${getStatusBadge(a.status)}</td>
+                    <td style="font-size:0.8rem; color:var(--text-muted)">${formatDate(a.bookedAt)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+    }
+
+    document.getElementById('filter-status').addEventListener('change', function() {
+        const val = this.value;
+        renderAppointments(val ? allAppts.filter(a => a.status === val) : allAppts);
+    });
+
+    loadAppointments();
+  </script>
+</body>
+</html>

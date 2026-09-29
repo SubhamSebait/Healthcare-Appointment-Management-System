@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Appointments — Healthcare App</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🏥</div>
+        <span>Healthcare<br>App</span>
+      </div>
+      <div class="sidebar-user">
+        <div class="user-name" id="sidebar-name">Loading...</div>
+        <div class="user-role">Patient</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html"       class="nav-item"><span class="icon">🏠</span> Dashboard</a>
+        <a href="doctors.html"         class="nav-item"><span class="icon">👨‍⚕️</span> Find Doctors</a>
+        <a href="my-appointments.html" class="nav-item active"><span class="icon">📅</span> My Appointments</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn-logout" onclick="logout()">🚪 Logout</button>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <div class="topbar">
+        <div>
+          <h2>My Appointments</h2>
+          <div class="breadcrumb">Track and manage your appointments</div>
+        </div>
+        <a href="doctors.html" class="btn btn-primary">+ Book New</a>
+      </div>
+      <div class="content-area">
+        <!-- Filter -->
+        <div class="filters-bar mb-2">
+          <select id="filter-status" class="form-control" style="max-width:200px">
+            <option value="">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Rejected">Rejected</option>
+            <option value="Cancelled">Cancelled</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+
+        <div class="card">
+          <div class="card-body" id="appointments-container">
+            <div class="loading">Loading your appointments...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cancel Confirm Modal -->
+  <div class="modal-overlay" id="cancel-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Cancel Appointment</h3>
+        <button class="modal-close" onclick="closeCancelModal()">✕</button>
+      </div>
+      <p>Are you sure you want to cancel this appointment? This action cannot be undone.</p>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCancelModal()">No, Keep it</button>
+        <button class="btn btn-danger" id="btn-confirm-cancel" onclick="confirmCancel()">Yes, Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script>
+    requireAuth('Patient');
+    setupSidebar();
+
+    let allAppts = [];
+    let cancelId = null;
+
+    async function loadAppointments() {
+        try {
+            allAppts = await Appointments.getMy();
+            renderAppointments(allAppts);
+        } catch (err) {
+            document.getElementById('appointments-container').innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    function renderAppointments(appts) {
+        const container = document.getElementById('appointments-container');
+        if (appts.length === 0) {
+            container.innerHTML = `<div class="empty-state"><div class="icon">📅</div><h3>No appointments found</h3><p>Book an appointment to get started.</p><a href="doctors.html" class="btn btn-primary mt-2">Find a Doctor</a></div>`;
+            return;
+        }
+        container.innerHTML = `
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Doctor</th>
+                  <th>Specialization</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${appts.map((a, i) => `
+                  <tr>
+                    <td>${i+1}</td>
+                    <td><strong>${a.doctorName}</strong></td>
+                    <td>${a.specializationName}</td>
+                    <td>${formatDate(a.date)}</td>
+                    <td>${formatTime(a.startTime)} – ${formatTime(a.endTime)}</td>
+                    <td>${getStatusBadge(a.status)}</td>
+                    <td style="max-width:160px; font-size:0.8rem; color:var(--text-muted)">${a.notes || '-'}</td>
+                    <td>
+                      ${(a.status === 'Pending' || a.status === 'Confirmed')
+                        ? `<button class="btn btn-sm btn-danger" onclick="openCancelModal(${a.id})">Cancel</button>`
+                        : '-'}
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+    }
+
+    document.getElementById('filter-status').addEventListener('change', function() {
+        const val = this.value;
+        const filtered = val ? allAppts.filter(a => a.status === val) : allAppts;
+        renderAppointments(filtered);
+    });
+
+    function openCancelModal(id) {
+        cancelId = id;
+        document.getElementById('cancel-modal').classList.add('open');
+    }
+    function closeCancelModal() {
+        cancelId = null;
+        document.getElementById('cancel-modal').classList.remove('open');
+    }
+
+    async function confirmCancel() {
+        if (!cancelId) return;
+        const btn = document.getElementById('btn-confirm-cancel');
+        btn.textContent = 'Cancelling...';
+        btn.disabled = true;
+        try {
+            await Appointments.cancel(cancelId);
+            showToast('Appointment cancelled.', 'success');
+            closeCancelModal();
+            await loadAppointments();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.textContent = 'Yes, Cancel';
+            btn.disabled = false;
+        }
+    }
+
+    loadAppointments();
+  </script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Specializations — Healthcare App</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div class="logo-icon">🏥</div><span>Healthcare<br>App</span></div>
+      <div class="sidebar-user">
+        <div class="user-name" id="sidebar-name">Loading...</div>
+        <div class="user-role">Admin</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html"              class="nav-item"><span class="icon">🏠</span> Dashboard</a>
+        <a href="manage-doctors.html"         class="nav-item"><span class="icon">👨‍⚕️</span> Manage Doctors</a>
+        <a href="manage-specializations.html" class="nav-item active"><span class="icon">🩺</span> Specializations</a>
+        <a href="patients.html"               class="nav-item"><span class="icon">👥</span> Patients</a>
+        <a href="appointments.html"           class="nav-item"><span class="icon">📅</span> All Appointments</a>
+      </nav>
+      <div class="sidebar-footer"><button class="btn-logout" onclick="logout()">🚪 Logout</button></div>
+    </aside>
+
+    <div class="main-content">
+      <div class="topbar">
+        <div><h2>Manage Specializations</h2><div class="breadcrumb">Add or edit medical specializations</div></div>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add Specialization</button>
+      </div>
+      <div class="content-area">
+        <div class="card">
+          <div class="card-body" id="specs-container">
+            <div class="loading">Loading specializations...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div class="modal-overlay" id="spec-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Add Specialization</h3>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div id="modal-alert" class="alert alert-danger hidden"></div>
+      <div class="form-group">
+        <label for="s-name">Name</label>
+        <input type="text" id="s-name" class="form-control" placeholder="e.g. Cardiologist" required>
+      </div>
+      <div class="form-group">
+        <label for="s-desc">Description</label>
+        <textarea id="s-desc" class="form-control" rows="2" placeholder="Brief description"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="btn-save" onclick="saveSpec()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirm -->
+  <div class="modal-overlay" id="delete-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>Delete Specialization</h3><button class="modal-close" onclick="closeDeleteModal()">✕</button></div>
+      <p>Delete <strong id="del-name"></strong>? This cannot be done if doctors are assigned to it.</p>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" id="btn-del" onclick="confirmDelete()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script>
+    requireAuth('Admin');
+    setupSidebar();
+
+    let editingId   = null;
+    let deletingId  = null;
+
+    async function loadSpecs() {
+        const container = document.getElementById('specs-container');
+        try {
+            const specs = await Specializations.getAll();
+            if (specs.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">🩺</div><h3>No specializations</h3></div>`;
+                return;
+            }
+            container.innerHTML = `
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>#</th><th>Name</th><th>Description</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    ${specs.map((s, i) => `
+                      <tr>
+                        <td>${i+1}</td>
+                        <td><strong>${s.name}</strong></td>
+                        <td style="color:var(--text-muted); font-size:0.875rem">${s.description || '-'}</td>
+                        <td>
+                          <div class="flex gap-1">
+                            <button class="btn btn-sm btn-secondary" onclick="openEditModal(${s.id}, '${s.name}', \`${(s.description||'').replace(/`/g,"'")}\`)">Edit</button>
+                            <button class="btn btn-sm btn-danger"    onclick="openDeleteModal(${s.id}, '${s.name}')">Delete</button>
+                          </div>
+                        </td>
+                      </tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>`;
+        } catch (err) {
+            container.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    function openAddModal() {
+        editingId = null;
+        document.getElementById('modal-title').textContent = 'Add Specialization';
+        document.getElementById('s-name').value = '';
+        document.getElementById('s-desc').value = '';
+        document.getElementById('modal-alert').classList.add('hidden');
+        document.getElementById('spec-modal').classList.add('open');
+    }
+    function openEditModal(id, name, desc) {
+        editingId = id;
+        document.getElementById('modal-title').textContent = 'Edit Specialization';
+        document.getElementById('s-name').value = name;
+        document.getElementById('s-desc').value = desc;
+        document.getElementById('modal-alert').classList.add('hidden');
+        document.getElementById('spec-modal').classList.add('open');
+    }
+    function closeModal() { document.getElementById('spec-modal').classList.remove('open'); }
+
+    async function saveSpec() {
+        const alert = document.getElementById('modal-alert');
+        const btn   = document.getElementById('btn-save');
+        const dto   = { name: document.getElementById('s-name').value, description: document.getElementById('s-desc').value };
+        if (!dto.name) { alert.textContent = 'Name is required.'; alert.classList.remove('hidden'); return; }
+        alert.classList.add('hidden');
+        btn.disabled = true; btn.textContent = 'Saving...';
+        try {
+            if (editingId) await Specializations.update(editingId, dto);
+            else           await Specializations.create(dto);
+            showToast(editingId ? 'Specialization updated.' : 'Specialization added.', 'success');
+            closeModal();
+            await loadSpecs();
+        } catch (err) {
+            alert.textContent = err.message;
+            alert.classList.remove('hidden');
+        } finally {
+            btn.disabled = false; btn.textContent = 'Save';
+        }
+    }
+
+    function openDeleteModal(id, name) {
+        deletingId = id;
+        document.getElementById('del-name').textContent = name;
+        document.getElementById('delete-modal').classList.add('open');
+    }
+    function closeDeleteModal() {
+        deletingId = null;
+        document.getElementById('delete-modal').classList.remove('open');
+    }
+    async function confirmDelete() {
+        if (!deletingId) return;
+        const btn = document.getElementById('btn-del');
+        btn.disabled = true; btn.textContent = 'Deleting...';
+        try {
+            await Specializations.delete(deletingId);
+            showToast('Specialization deleted.', 'info');
+            closeDeleteModal();
+            await loadSpecs();
+        } catch (err) {
+            showToast(err.message, 'error');
+            closeDeleteModal();
+        } finally {
+            btn.disabled = false; btn.textContent = 'Delete';
+        }
+    }
+
+    loadSpecs();
+  </script>
+</body>
+</html>

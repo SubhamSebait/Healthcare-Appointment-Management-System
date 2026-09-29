@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patients — Healthcare App</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div class="logo-icon">🏥</div><span>Healthcare<br>App</span></div>
+      <div class="sidebar-user">
+        <div class="user-name" id="sidebar-name">Loading...</div>
+        <div class="user-role">Admin</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html"              class="nav-item"><span class="icon">🏠</span> Dashboard</a>
+        <a href="manage-doctors.html"         class="nav-item"><span class="icon">👨‍⚕️</span> Manage Doctors</a>
+        <a href="manage-specializations.html" class="nav-item"><span class="icon">🩺</span> Specializations</a>
+        <a href="patients.html"               class="nav-item active"><span class="icon">👥</span> Patients</a>
+        <a href="appointments.html"           class="nav-item"><span class="icon">📅</span> All Appointments</a>
+      </nav>
+      <div class="sidebar-footer"><button class="btn-logout" onclick="logout()">🚪 Logout</button></div>
+    </aside>
+
+    <div class="main-content">
+      <div class="topbar"><div><h2>All Patients</h2><div class="breadcrumb">Registered patient list</div></div></div>
+      <div class="content-area">
+        <div class="card">
+          <div class="card-body" id="patients-container">
+            <div class="loading">Loading patients...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script>
+    requireAuth('Admin');
+    setupSidebar();
+
+    async function loadPatients() {
+        const container = document.getElementById('patients-container');
+        try {
+            const patients = await Admin.getPatients();
+            if (patients.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">👥</div><h3>No patients registered yet.</h3></div>`;
+                return;
+            }
+            container.innerHTML = `
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Date of Birth</th></tr></thead>
+                  <tbody>
+                    ${patients.map((p, i) => `
+                      <tr>
+                        <td>${i+1}</td>
+                        <td><strong>${p.fullName}</strong></td>
+                        <td>${p.email}</td>
+                        <td>${p.phone || '-'}</td>
+                        <td>${p.dateOfBirth ? formatDate(p.dateOfBirth) : '-'}</td>
+                      </tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>`;
+        } catch (err) {
+            container.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    loadPatients();
+  </script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doctor Dashboard — Healthcare App</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🏥</div>
+        <span>Healthcare<br>App</span>
+      </div>
+      <div class="sidebar-user">
+        <div class="user-name" id="sidebar-name">Loading...</div>
+        <div class="user-role">Doctor</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html"   class="nav-item active"><span class="icon">🏠</span> Dashboard</a>
+        <a href="availability.html" class="nav-item"><span class="icon">🕐</span> Manage Slots</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn-logout" onclick="logout()">🚪 Logout</button>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <div class="topbar">
+        <div>
+          <h2>Doctor Dashboard</h2>
+          <div class="breadcrumb">Manage your appointments</div>
+        </div>
+        <a href="availability.html" class="btn btn-primary">+ Add Slots</a>
+      </div>
+      <div class="content-area">
+        <!-- Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon orange">⏳</div>
+            <div class="stat-info"><div class="value" id="stat-pending">-</div><div class="label">Pending</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">✅</div>
+            <div class="stat-info"><div class="value" id="stat-confirmed">-</div><div class="label">Confirmed</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon blue">📅</div>
+            <div class="stat-info"><div class="value" id="stat-total">-</div><div class="label">Total</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple">🏁</div>
+            <div class="stat-info"><div class="value" id="stat-completed">-</div><div class="label">Completed</div></div>
+          </div>
+        </div>
+
+        <!-- Appointments Table -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Appointments</h3>
+            <select id="filter-status" class="form-control" style="max-width:160px; font-size:0.8rem">
+              <option value="">All</option>
+              <option value="Pending">Pending</option>
+              <option value="Confirmed">Confirmed</option>
+              <option value="Completed">Completed</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="card-body" id="appointments-container">
+            <div class="loading">Loading appointments...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Modal -->
+  <div class="modal-overlay" id="action-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Appointment Action</h3>
+        <button class="modal-close" onclick="closeActionModal()">✕</button>
+      </div>
+      <div id="modal-appt-info" style="padding:0.75rem; background:var(--bg); border-radius:var(--radius); margin-bottom:1rem; font-size:0.875rem;"></div>
+      <div class="form-group">
+        <label for="doctor-notes">Notes / Remarks (optional)</label>
+        <textarea id="doctor-notes" class="form-control" rows="3" placeholder="Add any notes for the patient..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeActionModal()">Cancel</button>
+        <button class="btn" id="btn-action" onclick="submitAction()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script>
+    requireAuth('Doctor');
+    setupSidebar();
+
+    let allAppts   = [];
+    let actionId   = null;
+    let actionType = null;
+
+    async function loadAppointments() {
+        try {
+            allAppts = await Appointments.getDoctor();
+
+            document.getElementById('stat-total').textContent     = allAppts.length;
+            document.getElementById('stat-pending').textContent   = allAppts.filter(a => a.status === 'Pending').length;
+            document.getElementById('stat-confirmed').textContent = allAppts.filter(a => a.status === 'Confirmed').length;
+            document.getElementById('stat-completed').textContent = allAppts.filter(a => a.status === 'Completed').length;
+
+            renderAppointments(allAppts);
+        } catch (err) {
+            document.getElementById('appointments-container').innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    function renderAppointments(appts) {
+        const container = document.getElementById('appointments-container');
+        if (appts.length === 0) {
+            container.innerHTML = `<div class="empty-state"><div class="icon">📋</div><h3>No appointments</h3><p>Appointments will appear here when patients book.</p></div>`;
+            return;
+        }
+        container.innerHTML = `
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Patient</th><th>Date</th><th>Time</th><th>Status</th><th>Notes</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                ${appts.map((a, i) => `
+                  <tr>
+                    <td>${i+1}</td>
+                    <td><strong>${a.patientName}</strong></td>
+                    <td>${formatDate(a.date)}</td>
+                    <td>${formatTime(a.startTime)} – ${formatTime(a.endTime)}</td>
+                    <td>${getStatusBadge(a.status)}</td>
+                    <td style="font-size:0.8rem; color:var(--text-muted); max-width:140px">${a.notes || '-'}</td>
+                    <td>
+                      <div class="flex gap-1" style="flex-wrap:wrap">
+                        ${a.status === 'Pending' ? `
+                          <button class="btn btn-sm btn-success" onclick="openAction(${a.id}, 'confirm', '${a.patientName}', '${formatDate(a.date)}', '${formatTime(a.startTime)}')">✓ Confirm</button>
+                          <button class="btn btn-sm btn-danger"  onclick="openAction(${a.id}, 'reject',  '${a.patientName}', '${formatDate(a.date)}', '${formatTime(a.startTime)}')">✗ Reject</button>` : ''}
+                        ${a.status === 'Confirmed' ? `
+                          <button class="btn btn-sm btn-primary" onclick="openAction(${a.id}, 'complete', '${a.patientName}', '${formatDate(a.date)}', '${formatTime(a.startTime)}')">🏁 Complete</button>` : ''}
+                        ${!['Pending','Confirmed'].includes(a.status) ? '<span class="text-muted" style="font-size:0.8rem">-</span>' : ''}
+                      </div>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+    }
+
+    document.getElementById('filter-status').addEventListener('change', function() {
+        const val = this.value;
+        renderAppointments(val ? allAppts.filter(a => a.status === val) : allAppts);
+    });
+
+    function openAction(id, type, patient, date, time) {
+        actionId   = id;
+        actionType = type;
+
+        const titles = { confirm: 'Confirm Appointment', reject: 'Reject Appointment', complete: 'Mark as Completed' };
+        const btnClasses = { confirm: 'btn-success', reject: 'btn-danger', complete: 'btn-primary' };
+        const btnLabels  = { confirm: '✓ Confirm', reject: '✗ Reject', complete: '🏁 Complete' };
+
+        document.getElementById('modal-title').textContent = titles[type];
+        document.getElementById('modal-appt-info').innerHTML = `
+          <strong>Patient:</strong> ${patient}<br>
+          <strong>Date:</strong> ${date} at ${time}`;
+        document.getElementById('doctor-notes').value = '';
+
+        const btn = document.getElementById('btn-action');
+        btn.className = `btn ${btnClasses[type]}`;
+        btn.textContent = btnLabels[type];
+
+        document.getElementById('action-modal').classList.add('open');
+    }
+
+    function closeActionModal() {
+        actionId   = null;
+        actionType = null;
+        document.getElementById('action-modal').classList.remove('open');
+    }
+
+    async function submitAction() {
+        const btn   = document.getElementById('btn-action');
+        const notes = document.getElementById('doctor-notes').value;
+        btn.disabled = true;
+        btn.textContent = 'Processing...';
+
+        try {
+            if (actionType === 'confirm')  await Appointments.confirm(actionId, notes);
+            if (actionType === 'reject')   await Appointments.reject(actionId, notes);
+            if (actionType === 'complete') await Appointments.complete(actionId, notes);
+
+            showToast('Action completed successfully!', 'success');
+            closeActionModal();
+            await loadAppointments();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    loadAppointments();
+  </script>
+</body>
+</html>

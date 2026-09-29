@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patient Dashboard — Healthcare App</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🏥</div>
+        <span>Healthcare<br>App</span>
+      </div>
+      <div class="sidebar-user">
+        <div class="user-name" id="sidebar-name">Loading...</div>
+        <div class="user-role">Patient</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html"        class="nav-item active"><span class="icon">🏠</span> Dashboard</a>
+        <a href="doctors.html"          class="nav-item"><span class="icon">👨‍⚕️</span> Find Doctors</a>
+        <a href="my-appointments.html"  class="nav-item"><span class="icon">📅</span> My Appointments</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn-logout" onclick="logout()">🚪 Logout</button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main-content">
+      <div class="topbar">
+        <div>
+          <h2>Dashboard</h2>
+          <div class="breadcrumb">Welcome back, <span id="welcome-name"></span></div>
+        </div>
+      </div>
+      <div class="content-area">
+        <!-- Stats -->
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue">📅</div>
+            <div class="stat-info"><div class="value" id="stat-total">-</div><div class="label">Total Appointments</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange">⏳</div>
+            <div class="stat-info"><div class="value" id="stat-pending">-</div><div class="label">Pending</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">✅</div>
+            <div class="stat-info"><div class="value" id="stat-confirmed">-</div><div class="label">Confirmed</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple">🏁</div>
+            <div class="stat-info"><div class="value" id="stat-completed">-</div><div class="label">Completed</div></div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card mb-3">
+          <div class="card-header"><h3>Quick Actions</h3></div>
+          <div class="card-body" style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+            <a href="doctors.html" class="btn btn-primary">👨‍⚕️ Find a Doctor</a>
+            <a href="my-appointments.html" class="btn btn-secondary">📋 View My Appointments</a>
+          </div>
+        </div>
+
+        <!-- Recent Appointments -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Recent Appointments</h3>
+            <a href="my-appointments.html" class="btn btn-sm btn-secondary">View All</a>
+          </div>
+          <div class="card-body" id="recent-appts">
+            <div class="loading">Loading appointments...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script>
+    requireAuth('Patient');
+    setupSidebar();
+
+    const user = getUser();
+    document.getElementById('welcome-name').textContent = user?.fullName || '';
+
+    async function loadDashboard() {
+        try {
+            const appts = await Appointments.getMy();
+
+            document.getElementById('stat-total').textContent     = appts.length;
+            document.getElementById('stat-pending').textContent   = appts.filter(a => a.status === 'Pending').length;
+            document.getElementById('stat-confirmed').textContent = appts.filter(a => a.status === 'Confirmed').length;
+            document.getElementById('stat-completed').textContent = appts.filter(a => a.status === 'Completed').length;
+
+            const recent = appts.slice(0, 5);
+            const container = document.getElementById('recent-appts');
+
+            if (recent.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">📅</div><h3>No appointments yet</h3><p>Book your first appointment with a doctor.</p><a href="doctors.html" class="btn btn-primary mt-2">Find a Doctor</a></div>`;
+                return;
+            }
+
+            container.innerHTML = `
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>Doctor</th><th>Specialization</th><th>Date</th><th>Time</th><th>Status</th></tr></thead>
+                  <tbody>
+                    ${recent.map(a => `
+                      <tr>
+                        <td><strong>${a.doctorName}</strong></td>
+                        <td>${a.specializationName}</td>
+                        <td>${formatDate(a.date)}</td>
+                        <td>${formatTime(a.startTime)} – ${formatTime(a.endTime)}</td>
+                        <td>${getStatusBadge(a.status)}</td>
+                      </tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>`;
+        } catch (err) {
+            document.getElementById('recent-appts').innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

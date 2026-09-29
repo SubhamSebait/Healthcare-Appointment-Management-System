@@ -1,0 +1,21 @@
+# .NET build files
+**/bin/
+**/obj/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+
+# Runtime database
+HealthcareApp.API/HealthcareDB.db
+
+# Application logs
+HealthcareApp.API/Logs/
+
+# User-specific files
+*.user
+*.suo
+
+# Environment / secrets
+.env
+.env.*
